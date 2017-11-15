@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Reflection;
 using System.Runtime.InteropServices;
 
 namespace PhotoImport
@@ -13,6 +12,7 @@ namespace PhotoImport
         private readonly IImageDiscovery _imageDiscovery;
         private static readonly string[] SUB_DIRECTORIES = {"RAW", "Processed RAW", "Edits"};
         private readonly string _directorySeperator;
+        private PerformanceTracker _performanceStats;
 
         public bool OverwriteOutputFilenames { get; set; }
         
@@ -26,15 +26,21 @@ namespace PhotoImport
             {
                 _directorySeperator = "\\";
             }
+
+            _performanceStats = new PerformanceTracker();
         }
 
         public void Run(string sourceDirectory, string targetDirectory)
         {
+            _performanceStats.StartProcessingTimer();
             var imageDirectories = _imageDiscovery.GetImageDirectories(sourceDirectory);
+            _performanceStats.TotalSourceDirectories = imageDirectories.Count;
             foreach (var imageDirectory in imageDirectories)
             {
                 ProcessImageDirectory(imageDirectory, targetDirectory);
             }
+            _performanceStats.StopProcessingTimer();
+            _performanceStats.Report();
         }
 
         internal void ProcessImageDirectory(KeyValuePair<DirectoryInfo, DateTime> imageDirectory, string targetDirectory)
@@ -42,7 +48,8 @@ namespace PhotoImport
             if (_userRespondsPositively.ToQuestion($"Do you want to process {imageDirectory.Key}? (Y/N)"))
             {
                 var directoryDescription = GetADescriptionForTheDirectoryFromUser();
-                var destinationFolder = GenerateDestinationFolderName(targetDirectory,imageDirectory, directoryDescription);
+                var destinationFolder =
+                    GenerateDestinationFolderName(targetDirectory, imageDirectory, directoryDescription);
 
 
                 if (Directory.Exists(destinationFolder))
@@ -52,30 +59,39 @@ namespace PhotoImport
                 }
 
                 Directory.CreateDirectory(destinationFolder);
-                var subDirectories =  CreateSubDirectories(destinationFolder);
+                var subDirectories = CreateSubDirectories(destinationFolder);
 
-                CopyAllImagesToRawDirectory(imageDirectory.Key, subDirectories[0], directoryDescription);
+                CopyAllImagesToRawDirectory(imageDirectory.Key, subDirectories[0]);
 
+            }
+            else
+            {
+                _performanceStats.SourceDirectoriesIgnoredByUser += 1;
             }
         }
 
-        private void CopyAllImagesToRawDirectory(DirectoryInfo sourceDirectoryInfo, DirectoryInfo rawOutputDirectory, string directoryDescription)
+        private void CopyAllImagesToRawDirectory(DirectoryInfo sourceDirectoryInfo, DirectoryInfo rawOutputDirectory)
         {
             var files = sourceDirectoryInfo.GetFiles();
             int counter = 1;
+            _performanceStats.StartCopyTimer();
             foreach (var f in files)
             {
                 string outputfilename = f.Name;
                 if (OverwriteOutputFilenames)
-                    outputfilename = $"{directoryDescription}_{counter:###}{f.Extension}";
+                    outputfilename = $"{rawOutputDirectory.Parent.Name.Replace(" ", "_")}_{counter:###}{f.Extension}";
 
                 string outputFullPath = $"{rawOutputDirectory.FullName}{_directorySeperator}{outputfilename}";
                
                 _userIo.WriteLine($"Copying: {f.FullName} to {outputFullPath}");
                 f.CopyTo(outputFullPath);
+
+                _performanceStats.TotalFilesCopied += 1;
+                _performanceStats.TotalBytesCopied += f.Length;
                 
                 counter++;
             }
+            _performanceStats.StopCopyTimer();
             
         }
 
@@ -102,7 +118,15 @@ namespace PhotoImport
             var year = imageDirectory.Value.Year;
             var datedFolderName = imageDirectory.Value.ToString("yyyyMMdd");
 
-            return $"{targetDirectory}{year}{_directorySeperator}{datedFolderName} {directoryDescription}";
+            var fullPath =
+                $"{targetDirectory}{year}{_directorySeperator}{datedFolderName}";
+
+            if (!string.IsNullOrWhiteSpace(directoryDescription))
+            {
+                fullPath += $" {directoryDescription}";
+            }
+            
+            return fullPath;
         }
 
         private string GetADescriptionForTheDirectoryFromUser()
