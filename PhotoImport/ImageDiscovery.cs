@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
@@ -6,7 +7,7 @@ namespace PhotoImport
 {
     public interface IImageDiscovery
     {
-        List<string> GetImageDirectories(string baseDirectory);
+        Dictionary<DirectoryInfo, DateTime> GetImageDirectories(string baseDirectory);
     }
 
     public class ImageDiscovery : IImageDiscovery
@@ -15,11 +16,11 @@ namespace PhotoImport
         {
         }
 
-        public List<string> GetImageDirectories(string baseDirectory)
+        public Dictionary<DirectoryInfo, DateTime> GetImageDirectories(string baseDirectory)
         {
             DirectoryInfo di = new DirectoryInfo(baseDirectory);
             var directories = di.GetDirectories();
-            return directories.Select(x => x.FullName).ToList();
+            return directories.Select(x => new KeyValuePair<DirectoryInfo, DateTime>(x, x.LastAccessTime)).ToDictionary(x => x.Key, x => x.Value);
         }
     }
 }
