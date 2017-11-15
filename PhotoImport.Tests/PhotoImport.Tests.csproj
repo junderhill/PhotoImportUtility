@@ -1,0 +1,17 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netcoreapp1.1</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="FakeItEasy" Version="4.2.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="15.0.0" />
+    <PackageReference Include="xunit" Version="2.2.0" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.2.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\PhotoImport\PhotoImport.csproj">
+      <Project>{35D82C94-E818-40F8-8B19-1041CAFA5347}</Project>
+      <Name>PhotoImport</Name>
+    </ProjectReference>
+  </ItemGroup>
+</Project>
