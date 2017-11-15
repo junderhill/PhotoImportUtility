@@ -20,7 +20,7 @@ namespace PhotoImport
         {
             DirectoryInfo di = new DirectoryInfo(baseDirectory);
             var directories = di.GetDirectories();
-            return directories.Select(x => new KeyValuePair<DirectoryInfo, DateTime>(x, x.LastAccessTime)).ToDictionary(x => x.Key, x => x.Value);
+            return directories.Select(x => new KeyValuePair<DirectoryInfo, DateTime>(x, x.LastWriteTime)).ToDictionary(x => x.Key, x => x.Value);
         }
     }
 }

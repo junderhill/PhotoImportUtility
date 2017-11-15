@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 
 namespace PhotoImport
@@ -35,39 +36,43 @@ namespace PhotoImport
             _performanceStats.StartProcessingTimer();
             var imageDirectories = _imageDiscovery.GetImageDirectories(sourceDirectory);
             _performanceStats.TotalSourceDirectories = imageDirectories.Count;
-            foreach (var imageDirectory in imageDirectories)
+            
+            var toProcess = (from imageDirectory in imageDirectories select AskUserForDetailsOnDirectory(imageDirectory, targetDirectory) into details where details.HasValue select details.Value).ToList();
+
+            foreach (var i in toProcess)
             {
-                ProcessImageDirectory(imageDirectory, targetDirectory);
+                ProcessImageDirectory(i.Key,i.Value);
             }
             _performanceStats.StopProcessingTimer();
             _performanceStats.Report();
         }
 
-        internal void ProcessImageDirectory(KeyValuePair<DirectoryInfo, DateTime> imageDirectory, string targetDirectory)
+        private KeyValuePair<string, KeyValuePair<DirectoryInfo, DateTime>>? AskUserForDetailsOnDirectory(KeyValuePair<DirectoryInfo, DateTime> imageDirectory, string targetDirectory)
         {
             if (_userRespondsPositively.ToQuestion($"Do you want to process {imageDirectory.Key}? (Y/N)"))
             {
                 var directoryDescription = GetADescriptionForTheDirectoryFromUser();
                 var destinationFolder =
                     GenerateDestinationFolderName(targetDirectory, imageDirectory, directoryDescription);
-
-
-                if (Directory.Exists(destinationFolder))
-                {
-                    _userIo.WriteLine($"Directory {destinationFolder} already exists - ignoring");
-                    return;
-                }
-
-                Directory.CreateDirectory(destinationFolder);
-                var subDirectories = CreateSubDirectories(destinationFolder);
-
-                CopyAllImagesToRawDirectory(imageDirectory.Key, subDirectories[0]);
-
+                return new KeyValuePair<string, KeyValuePair<DirectoryInfo, DateTime>>(destinationFolder,
+                    imageDirectory);
             }
-            else
+            _performanceStats.SourceDirectoriesIgnoredByUser += 1;
+            return null;
+        }
+
+        internal void ProcessImageDirectory(string destinationFolder, KeyValuePair<DirectoryInfo, DateTime> imageDirectory)
+        {
+            if (Directory.Exists(destinationFolder))
             {
-                _performanceStats.SourceDirectoriesIgnoredByUser += 1;
+                _userIo.WriteLine($"Directory {destinationFolder} already exists - ignoring");
+                return;
             }
+
+            Directory.CreateDirectory(destinationFolder);
+            var subDirectories = CreateSubDirectories(destinationFolder);
+
+            CopyAllImagesToRawDirectory(imageDirectory.Key, subDirectories[0]);
         }
 
         private void CopyAllImagesToRawDirectory(DirectoryInfo sourceDirectoryInfo, DirectoryInfo rawOutputDirectory)
@@ -75,7 +80,7 @@ namespace PhotoImport
             var files = sourceDirectoryInfo.GetFiles();
             int counter = 1;
             _performanceStats.StartCopyTimer();
-            foreach (var f in files)
+            foreach (var f in files.OrderBy(f => f.CreationTimeUtc))
             {
                 string outputfilename = f.Name;
                 if (OverwriteOutputFilenames)
